@@ -43,12 +43,12 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
         for i in range(n_layers): # hidden layers
             if i == 0:
                 output = tf.layers.dense(
-                input_placeholder,
-                size,
-                activation=activation,
-                use_bias=True,
-                kernel_initializer=tf.contrib.layers.xavier_initializer(),
-                name= 'hidden-{}'.format(i)
+                    input_placeholder,
+                    size,
+                    activation=activation,
+                    use_bias=True,
+                    kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                    name='hidden-{}'.format(i)
                                          )
             else:
                 output = tf.layers.dense(
@@ -110,8 +110,8 @@ class Agent(object):
     def init_tf_sess(self):
         tf_config = tf.ConfigProto(inter_op_parallelism_threads=1, intra_op_parallelism_threads=1) 
         self.sess = tf.Session(config=tf_config)
-        self.sess.__enter__() # equivalent to `with self.sess:`
-        tf.global_variables_initializer().run() #pylint: disable=E1101
+        self.sess.__enter__()  # equivalent to `with self.sess:`
+        tf.global_variables_initializer().run()  # pylint: disable=E1101
 
     #========================================================================================#
     #                           ----------PROBLEM 2----------
@@ -127,14 +127,14 @@ class Agent(object):
                 sy_ac_na: placeholder for actions
                 sy_adv_n: placeholder for advantages
         """
-        raise NotImplementedError
+        # raise NotImplementedError
         sy_ob_no = tf.placeholder(shape=[None, self.ob_dim], name="ob", dtype=tf.float32)
         if self.discrete:
             sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) 
         else:
             sy_ac_na = tf.placeholder(shape=[None, self.ac_dim], name="ac", dtype=tf.float32) 
         # YOUR CODE HERE
-        sy_adv_n = None
+        sy_adv_n = tf.placeholder(shape=[None], name='adv', dtype=tf.float32)
         return sy_ob_no, sy_ac_na, sy_adv_n
 
 
@@ -166,15 +166,25 @@ class Agent(object):
                 Pass in self.n_layers for the 'n_layers' argument, and
                 pass in self.size for the 'size' argument.
         """
-        raise NotImplementedError
+        # raise NotImplementedError
         if self.discrete:
             # YOUR_CODE_HERE
-            sy_logits_na = None
+            sy_logits_na = build_mlp(
+                sy_ob_no,
+                self.ac_dim,
+                scope='policy_forward_mlp',
+                n_layers=self.n_layers,
+                size=self.size
+                )
             return sy_logits_na
         else:
             # YOUR_CODE_HERE
-            sy_mean = None
-            sy_logstd = None
+            sy_mean = build_mlp(sy_ob_no, self.ac_dim,
+                scope='policy_forward_mlp',
+                n_layers=self.n_layers,
+                size=self.size
+                )
+            sy_logstd = tf.get_variable(dtype=tf.float32, shape=[self.ac_dim], name="logstd")
             return (sy_mean, sy_logstd)
 
     #========================================================================================#
@@ -204,15 +214,22 @@ class Agent(object):
         
                  This reduces the problem to just sampling z. (Hint: use tf.random_normal!)
         """
-        raise NotImplementedError
+        # raise NotImplementedError
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
-            sy_sampled_ac = None
+            # tf.multinomial: Draws samples from a multinomial distribution
+            sy_sampled_ac = tf.multinomial(logits=sy_logits_na, num_samples=1,
+                                           name='sample_action')
+            # convert the shape from (batch_size, 1) -> (batch_size,)
+            sy_sampled_ac = tf.squeeze(sy_sampled_ac, [1])
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
-            sy_sampled_ac = None
+            z = tf.random_normal(tf.shape(sy_mean), mean=0.0, stddev=1.0, name='z')
+
+            sy_sampled_ac = tf.add(sy_mean, z*tf.exp(sy_logstd))
+
         return sy_sampled_ac
 
     #========================================================================================#
@@ -245,11 +262,14 @@ class Agent(object):
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_CODE_HERE
-            sy_logprob_n = None
+
+            sy_logprob_n = -tf.nn.softmax_cross_entropy_with_logits_v2(
+                labels=tf.one_hot(sy_ac_na, depth=self.ac_dim),
+                logits=sy_logits_na)
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_CODE_HERE
-            sy_logprob_n = None
+            sy_logprob_n = tfp.distributions.MultivariateNormalDiag(sy_mean, tf.exp(sy_logstd)).log_prob(sy_ac_na)
         return sy_logprob_n
 
     def build_computation_graph(self):
