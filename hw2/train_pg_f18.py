@@ -33,12 +33,44 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
             output_activation: activation of the ouput layers
 
         returns:
-            output placeholder of the network (the result of a forward pass) 
+            output placeholder of the network (the result of a forward pass)
+
 
         Hint: use tf.layers.dense    
     """
     # YOUR CODE HERE
-    raise NotImplementedError
+    with tf.variable_scope(scope):
+        for i in range(n_layers): # hidden layers
+            if i == 0:
+                output = tf.layers.dense(
+                input_placeholder,
+                size,
+                activation=activation,
+                use_bias=True,
+                kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                name= 'hidden-{}'.format(i)
+                                         )
+            else:
+                output = tf.layers.dense(
+                    output_tensor,
+                    size,
+                    activation=activation,
+                    use_bias=True,
+                    kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                    name='hidden-{}'.format(i)
+                                        )
+
+        output_placeholder = tf.layers.dense(
+            output,
+            output_size,
+            activation=output_activation,
+            use_bias=True,
+            kernel_initializer=tf.contrib.layers.xavier_initializer(),
+            name='output'
+            )
+
+
+    # raise NotImplementedError
     return output_placeholder
 
 def pathlength(path):
