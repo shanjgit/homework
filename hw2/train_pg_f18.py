@@ -310,7 +310,7 @@ class Agent(object):
         #                           ----------PROBLEM 2----------
         # Loss Function and Training Operation
         #========================================================================================#
-        loss = tf.reduce_sum(-self.sy_logprob_n * self.sy_adv_n) # YOUR CODE HERE
+        loss = tf.reduce_mean(-self.sy_logprob_n * self.sy_adv_n) # YOUR CODE HERE
         self.update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(loss)
 
         #========================================================================================#
@@ -358,8 +358,9 @@ class Agent(object):
             #====================================================================================#
             #                           ----------PROBLEM 3----------
             #====================================================================================#
-            raise NotImplementedError
-            ac = None # YOUR CODE HERE
+            # raise NotImplementedError
+            ac = self.sess.run(self.sy_sampled_ac,
+                               feed_dict={self.sy_ob_no: ob.reshape(1, -1)})  # YOUR CODE HERE
             ac = ac[0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
@@ -441,11 +442,44 @@ class Agent(object):
             Store the Q-values for all timesteps and all trajectories in a variable 'q_n',
             like the 'ob_no' and 'ac_na' above. 
         """
+        sum_of_path_lengths = 0
+        for re in re_n:
+            sum_of_path_lengths += re.shape[0]
         # YOUR_CODE_HERE
+
+        def _sum_discounted_rewards(rewards, gamma):
+            """
+            arguments:
+                - rewards: array of rewards from each step in one episode
+                - gamma: discount factor
+            returns:
+                - summed_rewards: an array of summed discounted rewards from each step onwards
+            """
+            summed_rewards = np.zeros_like(rewards)
+            total_rewards = 0
+            for i in reversed(range(len(rewards))):
+                # iterate in reverse order
+                total_rewards = total_rewards * gamma + rewards[i]
+                summed_rewards[i] = total_rewards
+            return summed_rewards
+
+        q_n = np.zeros(sum_of_path_lengths)
+        cum_path_lengths = 0
         if self.reward_to_go:
-            raise NotImplementedError
+            for re in re_n:
+                # re is the reward vector from this episode
+                summed_rewards = _sum_discounted_rewards(re, self.gamma)
+                path_length_i = len(re)
+                q_n[cum_path_lengths:(cum_path_lengths+path_length_i)] = summed_rewards
+                cum_path_lengths += path_length_i
         else:
-            raise NotImplementedError
+            for re in re_n:
+                summed_rewards = _sum_discounted_rewards(re, self.gamma)
+                total_rewards = summed_rewards[0] # total discounted rewards from this episode
+                path_length_i = len(re)
+                q_n[cum_path_lengths:(cum_path_lengths+path_length_i)] = total_rewards
+                cum_path_lengths += path_length_i
+
         return q_n
 
     def compute_advantage(self, ob_no, q_n):
