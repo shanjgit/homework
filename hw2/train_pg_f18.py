@@ -329,8 +329,8 @@ class Agent(object):
                                     n_layers=self.n_layers,
                                     size=self.size))
             # YOUR_CODE_HERE
-            self.sy_target_n = None
-            baseline_loss = None
+            self.sy_target_n = tf.placeholder(shape=(None), dtype=tf.float32,name='target')
+            baseline_loss = tf.reduce_mean(tf.squared_difference(self.baseline_prediction, self.sy_target_n))
             self.baseline_update_op = tf.train.AdamOptimizer(self.learning_rate).minimize(baseline_loss)
 
     def sample_trajectories(self, itr, env):
@@ -511,8 +511,9 @@ class Agent(object):
             # Hint #bl1: rescale the output from the nn_baseline to match the statistics
             # (mean and std) of the current batch of Q-values. (Goes with Hint
             # #bl2 in Agent.update_parameters.
-            raise NotImplementedError
-            b_n = None # YOUR CODE HERE
+            # raise NotImplementedError
+            b_n = self.sess.run(self.baseline_prediction, feed_dict={self.sy_ob_no: ob_no})  # YOUR CODE HERE
+            b_n = b_n * q_n.std() + q_n.mean()
             adv_n = q_n - b_n
         else:
             adv_n = q_n.copy()
@@ -546,8 +547,11 @@ class Agent(object):
         if self.normalize_advantages:
             # On the next line, implement a trick which is known empirically to reduce variance
             # in policy gradient methods: normalize adv_n to have mean zero and std=1.
-            raise NotImplementedError
-            adv_n = None # YOUR_CODE_HERE
+            # raise NotImplementedError
+            if adv_n.std() > 0:
+                adv_n = (adv_n - adv_n.mean()) / adv_n.std()
+            else:
+                adv_n = adv_n - adv_n.mean()  # YOUR_CODE_HERE
         return q_n, adv_n
 
     def update_parameters(self, ob_no, ac_na, q_n, adv_n):
@@ -583,8 +587,16 @@ class Agent(object):
             # Agent.compute_advantage.)
 
             # YOUR_CODE_HERE
-            raise NotImplementedError
-            target_n = None 
+            # raise NotImplementedError
+            if q_n.std() > 0:
+                target_n = (q_n - q_n.mean()) / q_n.std()
+            else:
+                target = q_n - q_n.mean()
+            _, loss = self.sess.run([self.baseline_update_op, self.baseline_loss],
+                                    feed_dict={
+                                        self.sy_ob_no: ob_no,
+                                        self.sy_target_n: target_n})
+            logz.log_tabular('LossNNBaseline', loss)
 
         #====================================================================================#
         #                           ----------PROBLEM 3----------
@@ -598,7 +610,17 @@ class Agent(object):
         # and after an update, and then log them below. 
 
         # YOUR_CODE_HERE
-        raise NotImplementedError
+        feed_dict = {
+            self.sy_ob_no: ob_no,
+            self.sy_ac_na: ac_na,
+            self.sy_adv_n: adv_n
+        }
+        loss_before = self.sess.run(self.loss, feed_dict=feed_dict)
+        _ = self.sess.run(self.update_op, feed_dict=feed_dict)
+        loss_after = self.sess.run(self.loss, feed_dict=feed_dict)
+        logz.log_tabular('LossBeforeUpdata', loss_before)
+        logz.log_tabular('LossAfterUpdate', loss_after)
+        return adv_n
 
 
 def train_PG(
