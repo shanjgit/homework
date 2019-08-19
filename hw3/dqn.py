@@ -88,7 +88,7 @@ class QLearner(object):
         https://papers.nips.cc/paper/3964-double-q-learning.pdf
     """
     assert type(env.observation_space) == gym.spaces.Box
-    assert type(env.action_space)      == gym.spaces.Discrete
+    assert type(env.action_space) == gym.spaces.Discrete
 
     self.target_update_freq = target_update_freq
     self.optimizer_spec = optimizer_spec
@@ -115,14 +115,14 @@ class QLearner(object):
 
     # set up placeholders
     # placeholder for current observation (or state)
-    self.obs_t_ph              = tf.placeholder(
+    self.obs_t_ph = tf.placeholder(
         tf.float32 if lander else tf.uint8, [None] + list(input_shape))
     # placeholder for current action
-    self.act_t_ph              = tf.placeholder(tf.int32,   [None])
+    self.act_t_ph = tf.placeholder(tf.int32,   [None])
     # placeholder for current reward
-    self.rew_t_ph              = tf.placeholder(tf.float32, [None])
+    self.rew_t_ph = tf.placeholder(tf.float32, [None])
     # placeholder for next observation (or state)
-    self.obs_tp1_ph            = tf.placeholder(
+    self.obs_tp1_ph = tf.placeholder(
         tf.float32 if lander else tf.uint8, [None] + list(input_shape))
     # placeholder for end of episode mask
     # this value is 1 if the next state corresponds to the end of an episode,
@@ -159,6 +159,23 @@ class QLearner(object):
     ######
 
     # YOUR CODE HERE
+    self.q_t = q_func(obs_t_float, self.num_actions, scope="q_func", reuse=False)
+    self.q_tp1 = q_func(obs_tp1_float, self.num_actions, scope="target_q_func", reuse=False)
+
+    # Bellman error: using the max(Q_tp1) from the target network
+    q_tp1_gather_indices = tf.range(self.batch_size) * self.num_actions + tf.argmax(self.q_tp1, axis=1,
+                                                                                    output_type=tf.int32)
+    # the target
+    y = self.rew_t_ph + gamma * tf.gather(tf.reshape(self.q_tp1, [-1]), q_tp1_gather_indices) * (1 - self.done_mask_ph)
+
+    # the Q(s, a) indexed by the actual actions taken from the q_func network
+    q_t_gather_indices = tf.range(self.batch_size) * self.num_actions + self.act_t_ph
+    q_t_s_a_values = tf.gather(tf.reshape(self.q_t, [-1]), q_t_gather_indices)
+
+    self.total_error = tf.reduce_mean(huber_loss(y - q_t_s_a_values))
+
+    q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func')
+    target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
 
     ######
 
