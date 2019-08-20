@@ -324,8 +324,36 @@ class QLearner(object):
       #####
 
       # YOUR CODE HERE
+      # Sample a batch of transitioins from replay buffer
+      obs_batch, act_batch, rew_batch, next_obs_batch, done_mask =\
+      self.replay_buffer.sample(self.batch_size)
+
+
+
+      if not self.model_initialized:
+        priint('Initialize model')
+        initialize_interdependent_variables(self.session, tf.global_variables(), {
+          self.obs_t_ph: obs_batch,
+          self.obs_tp1_ph: next_obs_batch,
+        })
+        self.model_initialized = True
+
+      # Training
+      _, total_error = self.session.run([self.train_fn, self.total_error],
+        feed_dict={
+          self.obs_t_ph: obs_batch,
+          self.act_t_ph: act_batch,
+          self.rew_t_ph: rew_batch,
+          self.obs_tp1_ph: next_obs_batch,
+          self.done_mask_ph: done_mask,
+          self.learning_rate: self.optimizer_spec.lr_schedule.value(self.t),
+        })
+
 
       self.num_param_updates += 1
+      # Update target network
+      if self.num_param_updates % self.target_update_freq == 0:
+        self.session.run(self.update_target_fn)
 
     self.t += 1
 
