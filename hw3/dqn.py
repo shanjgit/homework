@@ -246,6 +246,39 @@ class QLearner(object):
     #####
 
     # YOUR CODE HERE
+    def epsilon_greedy(q_values, eps):
+      '''
+      q_values: 1d np.array of q_values
+      eps: epsilon
+      '''
+      num_actions = q_values.shape[0]
+      probs = np.ones_like(q_values) * (eps / num_actions)
+      best_action = np.argmax(q_values)
+      probs[best_action] += 1 - eps
+      return np.random.choice(num_actions, 1, p=probs)[0]
+
+    idx = self.replay_buffer.store_frame(self.last_obs)
+    obs_enc = self.replay_buffer.encode_recent_observation()
+    obs_enc = np.expand_dims(obs_enc, 0)
+
+    if self.model_initialized:
+      q_t_values = self.session.run(self.q_t, feed_dict={
+        self.obs_t_ph: obs_enc
+        })
+      q_t_values = q_t_values.ravel()
+
+    else:
+      q_t_values = np.zeros(self.num_actions)
+
+    eps = self.exploration.value(self.t)
+    action = epsilon_greedy(q_t_values, eps)
+    obs, reward, done, info = self.env.step(action)
+    # Store the transition into replay_buffer
+    self.replay_buffer.store_effect(idx, action, reward, done)
+
+    if done:
+      obs = self.env.reset()
+    self.last_obs = obs
 
   def update_model(self):
     ### 3. Perform experience replay and train the network.
