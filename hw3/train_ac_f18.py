@@ -35,8 +35,32 @@ def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=
 
         Hint: use tf.layers.dense    
     """
-    # YOUR HW2 CODE HERE
-    raise NotImplementedError
+    with tf.variable_scope(scope):
+        for i in range(n_layers):  # hidden layers
+            if i == 0:  # the first hidden layer
+                output_tensor = tf.layers.dense(input_placeholder,
+                                                size,
+                                                activation=activation,
+                                                use_bias=True,
+                                                kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                                name='hidden-%d' % i
+                                                )
+            else:
+                output_tensor = tf.layers.dense(output_tensor,
+                                                size,
+                                                activation=activation,
+                                                use_bias=True,
+                                                kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                                name='hidden-%d' % i
+                                                )
+        # the output layer
+        output_placeholder = tf.layers.dense(output_tensor,
+                                             output_size,
+                                             activation=output_activation,
+                                             use_bias=True,
+                                             kernel_initializer=tf.contrib.layers.xavier_initializer(),
+                                             name='output'
+                                             )
     return output_placeholder
 
 def pathlength(path):
@@ -91,7 +115,7 @@ class Agent(object):
                 sy_ac_na: placeholder for actions
                 sy_adv_n: placeholder for advantages
         """
-        raise NotImplementedError
+
         sy_ob_no = tf.placeholder(shape=[None, self.ob_dim], name="ob", dtype=tf.float32)
         if self.discrete:
             sy_ac_na = tf.placeholder(shape=[None], name="ac", dtype=tf.int32) 
