@@ -122,7 +122,7 @@ class Agent(object):
         else:
             sy_ac_na = tf.placeholder(shape=[None, self.ac_dim], name="ac", dtype=tf.float32) 
         # YOUR HW2 CODE HERE
-        sy_adv_n = None
+        sy_adv_n = tf.placeholder(shape=[None], name='adv', dtype=tf.float32)
         return sy_ob_no, sy_ac_na, sy_adv_n
 
     def policy_forward_pass(self, sy_ob_no):
@@ -150,16 +150,26 @@ class Agent(object):
                 Pass in self.n_layers for the 'n_layers' argument, and
                 pass in self.size for the 'size' argument.
         """
-        raise NotImplementedError
+        # raise NotImplementedError
         if self.discrete:
             # YOUR_HW2 CODE_HERE
-            sy_logits_na = None
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim,
+                scope='policy_forward_mlp',
+                n_layers=self.n_layers,
+                size=self.size
+                )
             return sy_logits_na
         else:
             # YOUR_HW2 CODE_HERE
-            sy_mean = None
-            sy_logstd = None
-            return (sy_mean, sy_logstd)
+            sy_mean = build_mlp(sy_ob_no,
+                self.ac_dim,
+                scope='policy_forward_mlp',
+                n_layers=self.n_layers,
+                size=self.size
+                )
+            sy_logstd = tf.get_variable(dtype=tf.float32, shape=[self.ac_dim], name="logstd")
+
+            return sy_mean, sy_logstd
 
     def sample_action(self, policy_parameters):
         """ Constructs a symbolic operation for stochastically sampling from the policy
@@ -185,15 +195,16 @@ class Agent(object):
         
                  This reduces the problem to just sampling z. (Hint: use tf.random_normal!)
         """
-        raise NotImplementedError
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_HW2 CODE_HERE
-            sy_sampled_ac = None
+            sy_sampled_ac = tf.multinomial(logits=sy_logits_na, num_samples=1, name='sample_action')
+            sy_sampled_ac = tf.squeeze(sy_sampled_ac, [1])
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_HW2 CODE_HERE
-            sy_sampled_ac = None
+            z = tf.random.normal(tf.shape(sy_mean), mean=0, stddev=1, name='z')
+            sy_sampled_ac = tf.add(sy_mean, tf.exp(sy_logstd) * z)
         return sy_sampled_ac
 
     def get_log_prob(self, policy_parameters, sy_ac_na):
