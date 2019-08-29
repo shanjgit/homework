@@ -232,11 +232,13 @@ class Agent(object):
         if self.discrete:
             sy_logits_na = policy_parameters
             # YOUR_HW2 CODE_HERE
-            sy_logprob_n = None
+            sy_logprob_n = -tf.nn.softmax_cross_entropy_with_logits_v2(
+                labels=tf.one_hot(sy_ac_na, depth=self.ac_dim),
+                logits=sy_logits_na)
         else:
             sy_mean, sy_logstd = policy_parameters
             # YOUR_HW2 CODE_HERE
-            sy_logprob_n = None
+            sy_logprob_n = tfp.distributions.MultivariateNormalDiag(sy_mean, tf.exp(sy_logstd)).log_prob(sy_ac_na)
         return sy_logprob_n
 
     def build_computation_graph(self):
