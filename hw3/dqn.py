@@ -331,7 +331,7 @@ class QLearner(object):
 
 
       if not self.model_initialized:
-        priint('Initialize model')
+        print('Initialize model')
         initialize_interdependent_variables(self.session, tf.global_variables(), {
           self.obs_t_ph: obs_batch,
           self.obs_tp1_ph: next_obs_batch,
@@ -374,17 +374,30 @@ class QLearner(object):
       print("exploration %f" % self.exploration.value(self.t))
       print("learning_rate %f" % self.optimizer_spec.lr_schedule.value(self.t))
       if self.start_time is not None:
-        print("running time %f" % ((time.time() - self.start_time) / 60.))
+          print("running time %f" % ((time.time() - self.start_time) / 60.))
+
+      logz.log_tabular('Timestep', self.t)
+      logz.log_tabular('MeanReward100Episodes', self.mean_episode_reward)
+      logz.log_tabular('BestMeanReward', self.best_mean_episode_reward)
+      logz.log_tabular('Episodes', len(episode_rewards))
+      logz.log_tabular('Exploration', self.exploration.value(self.t))
+      logz.log_tabular('LearningRate', self.optimizer_spec.lr_schedule.value(self.t))
+      logz.log_tabular('RunningTime', ((time.time() - self.start_time) / 60.))
+      logz.dump_tabular()
 
       self.start_time = time.time()
 
       sys.stdout.flush()
 
-      with open(self.rew_file, 'wb') as f:
-        pickle.dump(episode_rewards, f, pickle.HIGHEST_PROTOCOL)
+     # with open(self.rew_file, 'wb') as f:
+     #   pickle.dump(episode_rewards, f, pickle.HIGHEST_PROTOCOL)
 
 def learn(*args, **kwargs):
   alg = QLearner(*args, **kwargs)
+  logz.configure_output_dir(alg.logdir)
+  if alg.start_time is None:
+      alg.start_time = time.time()
+  
   while not alg.stopping_criterion_met():
     alg.step_env()
     # at this point, the environment should have been advanced one step (and

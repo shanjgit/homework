@@ -1,4 +1,5 @@
 import argparse
+import os
 import gym
 from gym import wrappers
 import os.path as osp
@@ -26,7 +27,10 @@ def atari_model(ram_in, num_actions, scope, reuse=False):
 
 def atari_learn(env,
                 session,
+                args,
                 num_timesteps):
+    logdir = os.path.join('data', args.exp_name)
+
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
 
@@ -65,12 +69,13 @@ def atari_learn(env,
         stopping_criterion=stopping_criterion,
         replay_buffer_size=1000000,
         batch_size=32,
-        gamma=0.99,
+        gamma=args.gamma,
         learning_starts=50000,
         learning_freq=4,
         frame_history_len=1,
         target_update_freq=10000,
-        grad_norm_clipping=10
+        grad_norm_clipping=10,
+        logdir=logdir
     )
     env.close()
 
@@ -89,6 +94,7 @@ def set_global_seeds(i):
     np.random.seed(i)
     random.seed(i)
 
+
 def get_session():
     tf.reset_default_graph()
     tf_config = tf.ConfigProto(
@@ -97,6 +103,7 @@ def get_session():
     session = tf.Session(config=tf_config)
     print("AVAILABLE GPUS: ", get_available_gpus())
     return session
+
 
 def get_env(seed):
     env = gym.make('Pong-ram-v0')
@@ -112,10 +119,20 @@ def get_env(seed):
 
 def main():
     # Run training
+    parser = argparse.ArgumentParser()
+    parser.add_argument('exp_name', type=str)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    #  parser.add_argument('--double_q', action='store_true')
+    args = parser.parse_args()
+    
+    if not os.path.exists('data'):
+        os.makedirs('data')
+
     seed = 0 # Use a seed of zero (you may want to randomize the seed!)
     env = get_env(seed)
     session = get_session()
-    atari_learn(env, session, num_timesteps=int(4e7))
+    atari_learn(env, session, num_timesteps=int(6e7))
 
 if __name__ == "__main__":
+    os.environ["CUDA_VISIBLE_DEVICES"]="0"
     main()
