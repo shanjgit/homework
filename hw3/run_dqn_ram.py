@@ -75,6 +75,7 @@ def atari_learn(env,
         frame_history_len=1,
         target_update_freq=10000,
         grad_norm_clipping=10,
+        double_q=args.double_q,
         logdir=logdir
     )
     env.close()
@@ -122,16 +123,18 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('exp_name', type=str)
     parser.add_argument('--gamma', type=float, default=0.99)
-    #  parser.add_argument('--double_q', action='store_true')
+    parser.add_argument('--double_q', action='store_true')
     args = parser.parse_args()
-    
+    if args.double_q:
+        print('double dqn mode')
     if not os.path.exists('data'):
         os.makedirs('data')
 
-    seed = 0 # Use a seed of zero (you may want to randomize the seed!)
+    seed = 0  # random.randint(0, 9999)
+    print('random seed = %d' % seed)# Use a seed of zero (you may want to randomize the seed!)
     env = get_env(seed)
     session = get_session()
-    atari_learn(env, session, num_timesteps=int(6e7))
+    atari_learn(env, session, args, num_timesteps=int(6e8))
 
 if __name__ == "__main__":
     os.environ["CUDA_VISIBLE_DEVICES"]="0"
