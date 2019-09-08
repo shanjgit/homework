@@ -277,7 +277,7 @@ class QLearner(object):
 
     obs, reward, done, info = self.env.step(act)
     # Store the transition into replay_buffer
-    self.replay_buffer.store_effect(idx, action, reward, done)
+    self.replay_buffer.store_effect(idx, act, reward, done)
 
     if done:
       obs = self.env.reset()
