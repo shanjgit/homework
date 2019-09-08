@@ -10,6 +10,8 @@ import tensorflow                as tf
 import tensorflow.contrib.layers as layers
 from collections import namedtuple
 from dqn_utils import *
+import inspect
+import logz
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedule"])
 
@@ -33,7 +35,8 @@ class QLearner(object):
     grad_norm_clipping=10,
     rew_file=None,
     double_q=True,
-    lander=False):
+    lander=False,
+    logdir=None):
     """Run Deep Q-learning algorithm.
 
     You can specify your own convnet using q_func.
@@ -100,7 +103,7 @@ class QLearner(object):
     self.session = session
     self.exploration = exploration
     self.rew_file = str(uuid.uuid4()) + '.pkl' if rew_file is None else rew_file
-
+    self.logdir = logdir
     ###############
     # BUILD MODEL #
     ###############
@@ -129,15 +132,15 @@ class QLearner(object):
     # in which case there is no Q-value at the next state; at the end of an
     # episode, only the current state reward contributes to the target, not the
     # next state Q-value (i.e. target is just rew_t_ph, not rew_t_ph + gamma * q_tp1)
-    self.done_mask_ph          = tf.placeholder(tf.float32, [None])
+    self.done_mask_ph = tf.placeholder(tf.float32, [None])
 
     # casting to float on GPU ensures lower data transfer times.
     if lander:
-      obs_t_float = self.obs_t_ph
-      obs_tp1_float = self.obs_tp1_ph
+        obs_t_float = self.obs_t_ph
+        obs_tp1_float = self.obs_tp1_ph
     else:
-      obs_t_float   = tf.cast(self.obs_t_ph,   tf.float32) / 255.0
-      obs_tp1_float = tf.cast(self.obs_tp1_ph, tf.float32) / 255.0
+        obs_t_float   = tf.cast(self.obs_t_ph,   tf.float32) / 255.0
+        obs_tp1_float = tf.cast(self.obs_tp1_ph, tf.float32) / 255.0
 
     # Here, you should fill in your own code to compute the Bellman error. This requires
     # evaluating the current and next Q-values and constructing the corresponding error.
@@ -159,24 +162,30 @@ class QLearner(object):
     ######
 
     # YOUR CODE HERE
-    self.q_t = q_func(obs_t_float, self.num_actions, scope="q_func", reuse=False)
-    self.q_tp1 = q_func(obs_tp1_float, self.num_actions, scope="target_q_func", reuse=False)
-
-    # Bellman error: using the max(Q_tp1) from the target network
-    q_tp1_gather_indices = tf.range(self.batch_size) * self.num_actions + tf.argmax(self.q_tp1, axis=1,
-                                                                                    output_type=tf.int32)
-    # the target
-    y = self.rew_t_ph + gamma * tf.gather(tf.reshape(self.q_tp1, [-1]), q_tp1_gather_indices) * (1 - self.done_mask_ph)
-
-    # the Q(s, a) indexed by the actual actions taken from the q_func network
-    q_t_gather_indices = tf.range(self.batch_size) * self.num_actions + self.act_t_ph
-    q_t_s_a_values = tf.gather(tf.reshape(self.q_t, [-1]), q_t_gather_indices)
-
-    self.total_error = tf.reduce_mean(huber_loss(y - q_t_s_a_values))
-
+    q = q_func(obs_t_float, self.num_actions, scope="q_func", reuse=False)
     q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='q_func')
+
+
+    target_q = q_func(obs_tp1_float, self.num_actions, scope="target_q_func", reuse=False)
     target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope='target_q_func')
 
+
+    # Bellman error: using the max(Q_tp1) from the target network
+    # q_tp1_gather_indices = tf.range(self.batch_size) * self.num_actions + tf.argmax(self.q_tp1, axis=1,
+    #                                                                                output_type=tf.int32)
+    self.best_act = tf.argmax(q, axis=1)
+
+    if not double_q:
+        q_t = tf.reduce_max(target_q, axis=1)
+    else:
+        q_temp = q_func(obs_tp1_float, self.num_actions, scope='q_func', reuse=True)
+        act_temp = tf.argmax(q_temp, axis=1)
+        q_t = tf.reduce_sum(tf.one_hot(act_temp, self.num_actions) * target_q, axis=1)
+    # the target
+    y = self.rew_t_ph + (1. - self.done_mask_ph) * gamma * q_t
+    y_pred = tf.reduce_sum(tf.one_hot(self.act_t_ph, self.num_actions) * q, axis=1)
+    self.total_error = tf.reduce_mean(huber_loss(y_pred - y))
+    
     ######
 
     # construct optimization op (with gradient clipping)
@@ -261,18 +270,12 @@ class QLearner(object):
     obs_enc = self.replay_buffer.encode_recent_observation()
     obs_enc = np.expand_dims(obs_enc, 0)
 
-    if self.model_initialized:
-      q_t_values = self.session.run(self.q_t, feed_dict={
-        self.obs_t_ph: obs_enc
-        })
-      q_t_values = q_t_values.ravel()
-
+    if not self.model_initialized or rendom.random() < self.exploration.value(self.t):
+        act = self.env.action_space.sample()
     else:
-      q_t_values = np.zeros(self.num_actions)
+        act = self.session.run(self.best_act, feed_dict={self.obs_t_ph:obs})[0]
 
-    eps = self.exploration.value(self.t)
-    action = epsilon_greedy(q_t_values, eps)
-    obs, reward, done, info = self.env.step(action)
+    obs, reward, done, info = self.env.step(act)
     # Store the transition into replay_buffer
     self.replay_buffer.store_effect(idx, action, reward, done)
 
