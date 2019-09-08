@@ -17,6 +17,12 @@ from multiprocessing import Process
 # Utilities
 #============================================================================================#
 
+
+def normalize(values, mean=0., std=1.):
+    values = (values - values.mean()) / (values.std() + 1e-8)
+    return mean + (std + 1e-8) * values
+
+
 def build_mlp(input_placeholder, output_size, scope, n_layers, size, activation=tf.tanh, output_activation=None):
     """
         Builds a feedforward neural network
@@ -153,21 +159,13 @@ class Agent(object):
         # raise NotImplementedError
         if self.discrete:
             # YOUR_HW2 CODE_HERE
-            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim,
-                scope='policy_forward_mlp',
-                n_layers=self.n_layers,
-                size=self.size
-                )
+            sy_logits_na = build_mlp(sy_ob_no, self.ac_dim, scope='policy_forward_mlp', n_layers=self.n_layers,
+                size=self.size)
             return sy_logits_na
         else:
             # YOUR_HW2 CODE_HERE
-            sy_mean = build_mlp(sy_ob_no,
-                self.ac_dim,
-                scope='policy_forward_mlp',
-                n_layers=self.n_layers,
-                size=self.size
-                )
-            sy_logstd = tf.get_variable(dtype=tf.float32, shape=[self.ac_dim], name="logstd")
+            sy_mean = build_mlp(sy_ob_no,self.ac_dim,scope='policy_forward_mlp',  n_layers=self.n_layers,size=self.size)
+            sy_logstd = tf.get_variable(dtype=tf.float32, shape=[self.ac_dim], name="sy_logstd")
 
             return sy_mean, sy_logstd
 
@@ -311,24 +309,23 @@ class Agent(object):
                 env.render()
                 time.sleep(0.1)
             obs.append(ob)
-            raise NotImplementedError
-            ac = None # YOUR HW2 CODE HERE
+            ac = self.sess.run(self.sy_sampled_ac, feed_dict={self.sy_ob_no: ob.reshape(1,-1)}) # YOUR HW2 CODE HERE
             ac = ac[0]
             acs.append(ac)
             ob, rew, done, _ = env.step(ac)
             # add the observation after taking a step to next_obs
             # YOUR CODE HERE
-            raise NotImplementedError
+            next_obs.append(ob)
             rewards.append(rew)
             steps += 1
             # If the episode ended, the corresponding terminal value is 1
             # otherwise, it is 0
             # YOUR CODE HERE
             if done or steps > self.max_path_length:
-                raise NotImplementedError
+                terminals.append(1)
                 break
             else:
-                raise NotImplementedError
+                terminals.append(0)
         path = {"observation" : np.array(obs, dtype=np.float32), 
                 "reward" : np.array(rewards, dtype=np.float32), 
                 "action" : np.array(acs, dtype=np.float32),
@@ -362,12 +359,12 @@ class Agent(object):
         # Note: don't forget to use terminal_n to cut off the V(s') term when computing Q(s, a)
         # otherwise the values will grow without bound.
         # YOUR CODE HERE
-        raise NotImplementedError
-        adv_n = None
-
+        v_n = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no: ob_no})
+        next_v_n = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no: next_ob_no})
+        q_n = re_n + (1-terminal_n) * self.gamma * next_v_n
+        adv_n = q_n - v_n
         if self.normalize_advantages:
-            raise NotImplementedError
-            adv_n = None # YOUR_HW2 CODE_HERE
+            adv_n = normalize(adv_n) # YOUR_HW2 CODE_HERE
         return adv_n
 
     def update_critic(self, ob_no, next_ob_no, re_n, terminal_n):
@@ -397,7 +394,15 @@ class Agent(object):
         # Note: don't forget to use terminal_n to cut off the V(s') term when computing the target
         # otherwise the values will grow without bound.
         # YOUR CODE HERE
-        raise NotImplementedError
+        for i range(self.num_target_updates):
+            next_v_n = self.sess.run(self.critic_prediction, feed_dict={self.sy_ob_no: next_ob_no})
+            q_n = re_n + (1-terminal_n) * self.gamma * next_v_n
+            for j in range(self.num_grad_steps_per_target_update):
+                feed_dict = {
+                        self.sy_ob_no: ob_no
+                        self.sy_target_n: q_n
+                        }
+                self.sess.run(self.critic_update_op, feed_dict=feed_dict)
 
     def update_actor(self, ob_no, ac_na, adv_n):
         """ 
@@ -519,8 +524,9 @@ def train_AC(
         # (2) use the updated critic to compute the advantage by, calling agent.estimate_advantage
         # (3) use the estimated advantage values to update the actor, by calling agent.update_actor
         # YOUR CODE HERE
-        raise NotImplementedError
-
+        agent.update_critic(ob_no, next_ob_no, re_n, terminal_n)
+        adv_n = agent.estimate_advantage(ob_no, next_ob_no, re_n, terminal_n)
+        agent.update_actor(ob_no, ac_na, adv_n)
         # Log diagnostics
         returns = [path["reward"].sum() for path in paths]
         ep_lengths = [pathlength(path) for path in paths]
@@ -607,4 +613,6 @@ def main():
         
 
 if __name__ == "__main__":
+    import os
+    os.environ["CUDA_VISIBLE_DEVICES"]="0"
     main()
