@@ -267,13 +267,12 @@ class QLearner(object):
       return np.random.choice(num_actions, 1, p=probs)[0]
 
     idx = self.replay_buffer.store_frame(self.last_obs)
-    obs_enc = self.replay_buffer.encode_recent_observation()
-    obs_enc = np.expand_dims(obs_enc, 0)
+    obs = self.replay_buffer.encode_recent_observation()
 
-    if not self.model_initialized or rendom.random() < self.exploration.value(self.t):
+    if not self.model_initialized or random.random() < self.exploration.value(self.t):
         act = self.env.action_space.sample()
     else:
-        act = self.session.run(self.best_act, feed_dict={self.obs_t_ph:obs})[0]
+        act = self.session.run(self.best_act, feed_dict={self.obs_t_ph:[obs]})[0]
 
     obs, reward, done, info = self.env.step(act)
     # Store the transition into replay_buffer

@@ -1,4 +1,5 @@
 import argparse
+import os
 import gym
 from gym import wrappers
 import os.path as osp
@@ -29,8 +30,11 @@ def atari_model(img_in, num_actions, scope, reuse=False):
         return out
 
 def atari_learn(env,
+                args,
                 session,
                 num_timesteps):
+
+    logdir = os.path.join('data', args.exp_name)
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
 
@@ -69,13 +73,14 @@ def atari_learn(env,
         stopping_criterion=stopping_criterion,
         replay_buffer_size=1000000,
         batch_size=32,
-        gamma=0.99,
+        gamma=args.gamma,
         learning_starts=50000,
         learning_freq=4,
         frame_history_len=4,
         target_update_freq=10000,
         grad_norm_clipping=10,
-        double_q=True
+        double_q=args.double_q,
+        logdir=logdir
     )
     env.close()
 
@@ -118,13 +123,19 @@ def get_env(task, seed):
 def main():
     # Get Atari games.
     task = gym.make('PongNoFrameskip-v4')
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument('exp_name', type=str)
+    parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--double_q', action='store_true')
+    parser.add_argument('--gpu', type=int, default=0)
+    args = parser.parse_args()
     # Run training
+    os.environ["CUDA_VISIBLE_DEVICES"]=str(args.gpu)
     seed = random.randint(0, 9999)
     print('random seed = %d' % seed)
     env = get_env(task, seed)
     session = get_session()
-    atari_learn(env, session, num_timesteps=2e8)
+    atari_learn(env, args, session, num_timesteps=2e8)
 
 if __name__ == "__main__":
     main()

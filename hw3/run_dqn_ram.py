@@ -137,5 +137,5 @@ def main():
     atari_learn(env, session, args, num_timesteps=int(6e8))
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"]="0"
+    os.environ["CUDA_VISIBLE_DEVICES"]="1"
     main()
